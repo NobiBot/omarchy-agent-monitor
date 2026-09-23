@@ -89,6 +89,41 @@ test('multiple independent agent processes create separate sessions', () => {
   assert.equal(Model.buildSessions(processes, matchers, 1000).length, 2)
 })
 
+test('desktop Codex app-server and its descendants are not standalone sessions', () => {
+  const processes = Model.parseProcesses([
+    line(60, 1, 1000, 100, 'S', 'codex', '/usr/lib/chatgpt/resources/codex -c features.code_mode_host=true app-server --analytics-default-enabled'),
+    line(61, 60, 1000, 90, 'S', 'codex', 'codex --continue'),
+    line(62, 61, 1000, 80, 'S', 'local-agent', 'local-agent'),
+    line(63, 1, 1000, 70, 'S', 'codex', 'codex app-server'),
+    line(64, 63, 1000, 60, 'S', 'codex', 'codex --continue'),
+    line(65, 1, 1000, 50, 'S', 'codex', 'codex --continue')
+  ].join('\n'))
+  const sessions = Model.buildSessions(processes, matchers, 1000)
+  assert.equal(JSON.stringify(sessions.map(item => item.pid)), JSON.stringify([65]))
+  assert.equal(sessions[0].agentId, 'codex')
+})
+
+test('app-server exclusion applies to custom matchers and stale selections', () => {
+  const custom = [{ id: 'all-codex', name: 'All Codex', executables: ['codex'] }]
+  const after = Model.parseProcesses([
+    line(70, 1, 1000, 30, 'S', 'codex', 'codex app-server'),
+    line(71, 70, 1000, 20, 'S', 'codex', 'codex --continue')
+  ].join('\n'))
+  // This models a popup selection captured before the exclusion was applied.
+  const selected = { pid: 70, agentId: 'all-codex', key: after[0].identity }
+  const fresh = Model.buildSessions(after, custom, 1000)
+  assert.equal(fresh.length, 0)
+  assert.equal(Model.sessionFor(fresh, selected), null)
+})
+
+test('app-server must be a whole argument token', () => {
+  const processes = Model.parseProcesses([
+    line(72, 1, 1000, 20, 'S', 'codex', 'codex --config app-server-enabled'),
+    line(73, 1, 1000, 20, 'S', 'codex', 'codex --project /tmp/app-server')
+  ].join('\n'))
+  assert.equal(JSON.stringify(Model.buildSessions(processes, matchers, 1000).map(item => item.pid)), JSON.stringify([72, 73]))
+})
+
 test('custom executable matchers are honored', () => {
   const process = Model.parseProcessLine(line(40, 1, 1000, 1, 'S', 'local-agent', 'local-agent --task'))
   assert.equal(Model.matcherForProcess(process, matchers).id, 'local')

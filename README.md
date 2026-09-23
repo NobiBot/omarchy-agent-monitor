@@ -16,6 +16,9 @@ omarchy bar move io.github.nobibot.agent-monitor --section right
 
 The plugin starts hidden when no supported agent is running. It appears with a
 count when it detects Claude Code, Codex CLI, OpenCode, Aider, or Gemini CLI.
+For Codex, this means standalone CLI sessions. ChatGPT's persistent Codex
+`app-server` backend and its descendants are deliberately excluded, even with
+custom matchers; stop desktop Codex tasks through the ChatGPT desktop app.
 Click the icon to open the process list. Every stop action shows the agent,
 PID, working directory, and process count before sending `SIGTERM`; processes
 that remain after the grace period receive `SIGKILL` only if their identity is

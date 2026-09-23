@@ -121,6 +121,13 @@ function isExitedProcess(process) {
   return !!process && /^[ZX]/.test(String(process.stat || ""))
 }
 
+function isCodexAppServer(process) {
+  if (!process || basename(firstArg(process.args)) !== "codex") return false
+  // app-server is a subcommand, not a substring in a path or option value.
+  var tokens = String(process.args || "").trim().split(/\s+/)
+  return tokens.indexOf("app-server") > 0
+}
+
 function buildSessions(processes, rawMatchers, currentUid, ignoredPids) {
   var matchers = normalizeMatchers(rawMatchers)
   var byPid = {}
@@ -135,6 +142,24 @@ function buildSessions(processes, rawMatchers, currentUid, ignoredPids) {
     byPid[process.pid] = process
     owned.push(process)
   }
+
+  // The desktop app's persistent backend is not a standalone CLI session.
+  // Exclude its whole process tree before applying even custom matchers.
+  var excluded = {}
+  function isExcluded(process) {
+    var parent = process
+    var seen = {}
+    while (parent && !seen[parent.pid]) {
+      if (excluded[parent.pid] || isCodexAppServer(parent)) {
+        excluded[process.pid] = true
+        return true
+      }
+      seen[parent.pid] = true
+      parent = byPid[parent.ppid]
+    }
+    return false
+  }
+  owned = owned.filter(function(process) { return !isExcluded(process) })
 
   var matched = {}
   for (var j = 0; j < owned.length; j++) {
